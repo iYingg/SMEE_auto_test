@@ -8,6 +8,7 @@
     "filename_format": "testcases_{interface}_{datetime}.json",
     "variable_scope": "selected",
     "mode": "full",
+    "constraint_groups": [],
     "case_count": "all",
     "random_seed": 42
   }

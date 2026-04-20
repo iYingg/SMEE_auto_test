@@ -38,8 +38,42 @@
 - `case_generation.filename_format`: 用例文件名模板
 - `case_generation.variable_scope`: `selected` 或 `all`
 - `case_generation.mode`: `full` 或 `simple`
+- `case_generation.constraint_groups`: 多参数组合约束组（可选）
 - `case_generation.case_count`: 正整数或 `all`
 - `case_generation.random_seed`: 随机种子
+
+`constraint_groups` 结构：
+- `name`: 约束组名称
+- `variables`: 该组包含的变量路径列表
+- `combinations`: 允许的组合列表（每项是 `{变量路径: 值}`）
+
+示例（把两个参数打包为有限合法组合）：
+
+```json
+"constraint_groups": [
+  {
+    "name": "base_and_struct0",
+    "variables": [
+      "align_scan_base.a",
+      "align_scan_periodic.other_struct[0].some_field"
+    ],
+    "combinations": [
+      {
+        "align_scan_base.a": "2",
+        "align_scan_periodic.other_struct[0].some_field": "0"
+      },
+      {
+        "align_scan_base.a": "6",
+        "align_scan_periodic.other_struct[0].some_field": "1"
+      }
+    ]
+  }
+]
+```
+
+说明：
+- 该组中的变量不会再做彼此笛卡尔积，只使用 `combinations` 里定义的组合。
+- 未在任何组中的变量，仍按原本候选值自由组合。
 
 ## 命令与选项
 

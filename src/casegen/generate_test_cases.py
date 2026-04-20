@@ -62,6 +62,16 @@ def _safe_int(value: object, default: int) -> int:
         return default
 
 
+def _normalize_constraint_groups(value: object) -> List[dict]:
+    if not isinstance(value, list):
+        return []
+    out: List[dict] = []
+    for item in value:
+        if isinstance(item, dict):
+            out.append(item)
+    return out
+
+
 def _get_case_generation_config(config: dict) -> dict:
     cfg = config.get("case_generation", {})
     if not isinstance(cfg, dict):
@@ -73,6 +83,7 @@ def _get_case_generation_config(config: dict) -> dict:
         "mode": _normalize_output_mode(cfg.get("mode", "full"), "full"),
         "case_count": _parse_case_count(cfg.get("case_count", "all"), "all"),
         "random_seed": _safe_int(cfg.get("random_seed", 42), 42),
+        "constraint_groups": _normalize_constraint_groups(cfg.get("constraint_groups")),
     }
 
 
@@ -98,11 +109,116 @@ def _sample_unique_indices(total_count: int, sample_count: int, rng: random.Rand
     return sorted(seen)
 
 
+def _build_dimensions(
+    selected_vars: List[dict], constraint_groups: List[dict], warnings: List[str]
+) -> tuple[List[dict], List[str]]:
+    var_map = {v["name"]: v for v in selected_vars}
+    constrained_vars = set()
+    dimensions: List[dict] = []
+    applied_group_names: List[str] = []
+
+    for idx, group in enumerate(constraint_groups, start=1):
+        name = str(group.get("name", f"group_{idx}"))
+        vars_raw = group.get("variables", [])
+        combos_raw = group.get("combinations", [])
+
+        if not isinstance(vars_raw, list) or not vars_raw:
+            warnings.append(f"Constraint group '{name}' skipped: variables is empty.")
+            continue
+        group_vars = [str(v) for v in vars_raw]
+
+        if not isinstance(combos_raw, list) or not combos_raw:
+            warnings.append(f"Constraint group '{name}' skipped: combinations is empty.")
+            continue
+
+        missing_vars = [v for v in group_vars if v not in var_map]
+        if missing_vars:
+            warnings.append(
+                f"Constraint group '{name}' skipped: variables not found in current scope: "
+                + ", ".join(missing_vars)
+            )
+            continue
+
+        overlap = [v for v in group_vars if v in constrained_vars]
+        if overlap:
+            warnings.append(
+                f"Constraint group '{name}' skipped: overlap with previous groups: "
+                + ", ".join(overlap)
+            )
+            continue
+
+        options: List[dict] = []
+        for combo_idx, combo in enumerate(combos_raw, start=1):
+            if not isinstance(combo, dict):
+                warnings.append(
+                    f"Constraint group '{name}' combo#{combo_idx} skipped: not an object."
+                )
+                continue
+
+            missing_keys = [v for v in group_vars if v not in combo]
+            if missing_keys:
+                warnings.append(
+                    f"Constraint group '{name}' combo#{combo_idx} skipped: missing keys: "
+                    + ", ".join(missing_keys)
+                )
+                continue
+
+            option: Dict[str, str] = {}
+            valid = True
+            for var_name in group_vars:
+                val = str(combo[var_name])
+                candidates = var_map[var_name]["candidates"]
+                if val not in candidates:
+                    warnings.append(
+                        f"Constraint group '{name}' combo#{combo_idx} skipped: value '{val}' "
+                        f"not in candidates of '{var_name}'."
+                    )
+                    valid = False
+                    break
+                option[var_name] = val
+            if valid:
+                options.append(option)
+
+        if not options:
+            warnings.append(f"Constraint group '{name}' skipped: no valid combinations.")
+            continue
+
+        dimensions.append(
+            {
+                "kind": "group",
+                "name": name,
+                "variables": group_vars,
+                "options": options,
+            }
+        )
+        applied_group_names.append(name)
+        for var_name in group_vars:
+            constrained_vars.add(var_name)
+
+    for v in selected_vars:
+        if v["name"] in constrained_vars:
+            continue
+        options = [{v["name"]: cand} for cand in v["candidates"]]
+        if not options:
+            continue
+        dimensions.append(
+            {
+                "kind": "single",
+                "name": v["name"],
+                "variables": [v["name"]],
+                "options": options,
+            }
+        )
+
+    return dimensions, applied_group_names
+
+
 def _build_interface_cases(
     interface_item: dict,
     scope: str,
     case_count_cfg: str | int,
     rng: random.Random,
+    constraint_groups: List[dict],
 ) -> dict:
     interface_name = str(interface_item.get("interface", "unknown"))
     expanded = interface_item.get("expanded_variables", [])
@@ -133,7 +249,8 @@ def _build_interface_cases(
             "Skipped variables with empty candidate list: " + ", ".join(empty_candidate_vars)
         )
 
-    radixes = [len(v["candidates"]) for v in vars_for_combine]
+    dimensions, applied_group_names = _build_dimensions(vars_for_combine, constraint_groups, warnings)
+    radixes = [len(d["options"]) for d in dimensions]
     total_combinations = math.prod(radixes) if radixes else 0
 
     requested = case_count_cfg
@@ -151,33 +268,29 @@ def _build_interface_cases(
     test_cases: List[dict] = []
     if total_combinations > 0 and generated_count > 0:
         if case_mode == "all_combinations":
-            combos = product(*[v["candidates"] for v in vars_for_combine])
-            for idx, combo in enumerate(combos, start=1):
+            combos = product(*[d["options"] for d in dimensions])
+            for idx, combo_options in enumerate(combos, start=1):
+                merged_inputs: Dict[str, str] = {}
+                for option in combo_options:
+                    merged_inputs.update(option)
                 test_cases.append(
                     {
                         "id": f"TC_{idx:06d}",
-                        "inputs": {
-                            var_def["name"]: value
-                            for var_def, value in zip(vars_for_combine, combo)
-                        },
+                        "inputs": merged_inputs,
                     }
                 )
         else:
             indices = _sample_unique_indices(total_combinations, generated_count, rng)
             for case_idx, combo_index in enumerate(indices, start=1):
                 digit_indexes = _decode_combination_index(combo_index, radixes)
-                combo = [
-                    var_def["candidates"][digit]
-                    for var_def, digit in zip(vars_for_combine, digit_indexes)
-                ]
+                merged_inputs: Dict[str, str] = {}
+                for dim, digit in zip(dimensions, digit_indexes):
+                    merged_inputs.update(dim["options"][digit])
                 test_cases.append(
                     {
                         "id": f"TC_{case_idx:06d}",
                         "combination_index": combo_index,
-                        "inputs": {
-                            var_def["name"]: value
-                            for var_def, value in zip(vars_for_combine, combo)
-                        },
+                        "inputs": merged_inputs,
                     }
                 )
     elif selected_vars and total_combinations == 0:
@@ -197,9 +310,11 @@ def _build_interface_cases(
             }
             for v in vars_for_combine
         ],
+        "constraint_groups_applied": applied_group_names,
         "stats": {
             "selected_variable_count": len(selected_vars),
             "combination_variable_count": len(vars_for_combine),
+            "combination_dimension_count": len(dimensions),
             "total_combinations": total_combinations,
             "requested_case_count": requested,
             "generated_case_count": len(test_cases),
@@ -237,7 +352,7 @@ def generate_cases(
     parsed = parse_targets(config_path, output_mode="full")
 
     interface_results = [
-        _build_interface_cases(item, scope, case_count_cfg, rng)
+        _build_interface_cases(item, scope, case_count_cfg, rng, gen_cfg["constraint_groups"])
         for item in parsed.get("interface_results", [])
     ]
 
