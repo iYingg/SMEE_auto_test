@@ -1,0 +1,52 @@
+{
+  "interface_results": [
+    {
+      "interface": "QA4A_request_align_periodic",
+      "expanded_variables": [
+        {
+          "name": "align_scan_base.a",
+          "basic_type": "int",
+          "variation_target": true
+        },
+        {
+          "name": "align_scan_periodic.other_struct[0].some_field",
+          "basic_type": "int",
+          "variation_target": true
+        },
+        {
+          "name": "align_scan_periodic.other_struct[1].some_field",
+          "basic_type": "int",
+          "variation_target": true
+        },
+        {
+          "name": "align_scan_periodic.other_struct[2].some_field",
+          "basic_type": "int",
+          "variation_target": true
+        }
+      ],
+      "stats": {
+        "expanded_variable_count": 4,
+        "variation_target_count": 4
+      },
+      "warnings": {
+        "unresolved_basic_types": []
+      },
+      "variation": {
+        "mode": "mark",
+        "enabled": true,
+        "patterns": [
+          "align_scan_base.a",
+          "align_scan_periodic.other_struct[*].some_field"
+        ]
+      }
+    }
+  ],
+  "summary": {
+    "interface_count": 1,
+    "expanded_variable_count": 4,
+    "variation_target_count": 4,
+    "report_scope": "variation_selected_only",
+    "output_mode": "simple",
+    "output_scope": "selected"
+  }
+}
