@@ -1,0 +1,14 @@
+{
+  "includes": [
+    "../parser/targets.json",
+    "../parser/profiles.json"
+  ],
+  "case_generation": {
+    "dir": "output/testcases",
+    "filename_format": "testcases_{interface}_{datetime}.json",
+    "variable_scope": "selected",
+    "mode": "full",
+    "case_count": "all",
+    "random_seed": 42
+  }
+}

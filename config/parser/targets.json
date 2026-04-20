@@ -1,0 +1,27 @@
+{
+  "type_files": [
+    "data/common",
+    "data/api/QA_tc.h"
+  ],
+  "interface_files": [
+    "data/api/**/*.h"
+  ],
+  "target_interfaces": [
+    "QA4A_request_align_periodic"
+  ],
+  "output": {
+    "dir": "output",
+    "filename_format": "parse_result_{interface}_{datetime}.json",
+    "mode": "full",
+    "scope": "all"
+  },
+  "variation": {
+    "mode": "mark",
+    "variables": [
+      "align_scan_base.a",
+      "align_scan_periodic.other_struct[*].some_field"
+    ]
+  },
+  "includes": "profiles.json"
+}
+
