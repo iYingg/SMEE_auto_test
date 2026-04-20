@@ -13,6 +13,7 @@ extern "C" {
 #define num_smee 3
 
 typedef int32_t SMEE_INT32;
+typedef char S_CHAR;
 
 typedef enum {
     SS800_CHUCK_1 = 0,
@@ -22,6 +23,7 @@ typedef enum {
 
 typedef struct {
     int some_field;
+    S_CHAR some_string[50];
 } OTHER_STRUCT;
 
 typedef struct {

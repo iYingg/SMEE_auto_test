@@ -192,6 +192,22 @@ class BoolTypeSpec(BaseTypeSpec):
         }
 
 
+class StringTypeSpec(BaseTypeSpec):
+    def default_legal_values(self) -> List[str]:
+        return ['""', '"A"', '"Hello"']
+
+    def default_illegal_values(self) -> List[str]:
+        return ["NULL"]
+
+    def default_boundary_values(self) -> dict:
+        return {
+            "empty": '""',
+            "min_len": '"A"',
+            "max_len": None,
+            "invalid": ["NULL"],
+        }
+
+
 class EnumTypeSpec(BaseTypeSpec):
     def __init__(
         self,
@@ -316,6 +332,8 @@ def select_type_spec(
     enum_member_values = enum_member_values or {}
     if basic_type == "enum(int)":
         return EnumTypeSpec(basic_type, source_type, profile, enum_members, enum_member_values)
+    if basic_type == "string":
+        return StringTypeSpec(basic_type, source_type, profile)
     if basic_type in INTEGER_LIMITS:
         return IntegerTypeSpec(basic_type, source_type, profile)
     if basic_type in {"float", "double", "long double"}:

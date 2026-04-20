@@ -41,6 +41,8 @@ BUILTIN_TYPES = {
     "_Bool",
     "void",
 }
+STRING_CHAR_TYPES = {"char", "signed char", "unsigned char"}
+STRING_BASIC_TYPE = "string"
 
 
 @dataclass
@@ -90,7 +92,7 @@ class CTypeParser:
     def parse_headers(self, file_paths: List[Path]) -> None:
         combined = []
         for fp in file_paths:
-            combined.append(fp.read_text(encoding="utf-8"))
+            combined.append(fp.read_text(encoding="utf-8"), errors="ignore")
         text = self._strip_comments("\n".join(combined))
         self._parse_macros(text)
         self._parse_enums(text)
@@ -388,6 +390,16 @@ class CTypeParser:
                     )
             return flattened
 
+        # C string style: char[] should be handled as one variable, not element-wise array.
+        if pointer_level == 0 and array_dims and basic in STRING_CHAR_TYPES:
+            return [
+                LeafVar(
+                    path=path,
+                    basic_type=STRING_BASIC_TYPE,
+                    source_type=self.resolve_alias(type_name),
+                )
+            ]
+
         return [
             LeafVar(path=base_path, basic_type=basic, source_type=self.resolve_alias(type_name))
             for base_path in self._expand_paths_with_arrays(path, array_dims)
@@ -395,4 +407,4 @@ class CTypeParser:
 
 
 def is_known_basic_type(type_name: str) -> bool:
-    return type_name in BUILTIN_TYPES or type_name == "enum(int)"
+    return type_name in BUILTIN_TYPES or type_name in {"enum(int)", STRING_BASIC_TYPE}

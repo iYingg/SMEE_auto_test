@@ -207,6 +207,28 @@ python src/parse_interface.py --config config/targets.json --mode full --scope s
 - 通配路径：`align_scan_periodic.other_struct[*].some_field`
 - 全局默认：`*`
 
+字符串变量特殊规则：
+- `char[]` / `signed char[]` / `unsigned char[]`（含 typedef 别名）按 `string` 处理。
+- 这类字段不会按数组下标展开，保留为单个变量路径。
+- 例如 `S_CHAR some_string[50];` 输出为
+  `align_scan_periodic.other_struct[0].some_string`（而不是 `...some_string[0..49]`）。
+
+字符串自定义示例：
+
+```json
+{
+  "variable_profiles": {
+    "align_scan_periodic.other_struct[*].some_string": {
+      "seed_pool": ["\"\"", "\"OK\"", "\"A123\""],
+      "illegal_values": ["NULL"],
+      "boundary_values": {
+        "max_len": "\"12345678901234567890\""
+      }
+    }
+  }
+}
+```
+
 ## 覆盖优先级
 
 最终策略按以下顺序合并，后者覆盖前者：
