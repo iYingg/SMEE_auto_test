@@ -38,6 +38,8 @@
 - `case_generation.filename_format`: 用例文件名模板
 - `case_generation.variable_scope`: `selected` 或 `all`
 - `case_generation.mode`: `full` 或 `simple`
+- `case_generation.extra_variables`: 全局额外变量（接口外参数）
+- `case_generation.interface_extra_variables`: 接口级额外变量
 - `case_generation.constraint_groups`: 多参数组合约束组（可选）
 - `case_generation.case_count`: 正整数或 `all`
 - `case_generation.random_seed`: 随机种子
@@ -74,6 +76,43 @@
 说明：
 - 该组中的变量不会再做彼此笛卡尔积，只使用 `combinations` 里定义的组合。
 - 未在任何组中的变量，仍按原本候选值自由组合。
+
+额外变量配置（接口外参数）：
+- `extra_variables`: 全局生效
+- `interface_extra_variables.<接口名>`: 只对指定接口生效
+
+每个额外变量支持两种候选值来源：
+1. 自定义：`candidates` 或 `seed_pool`
+2. 文件规则推导：设置 `basic_type/source_type`（可选 `from_profile: true`），从 `profiles.json` 对应规则生成候选值
+
+额外变量类型字段建议：
+- `type_name`: 推荐，填写 C 声明类型名（支持 typedef，自动归约到基础类型）
+- `source_type`: 可选，直接指定源类型名（会尝试归约）
+- `basic_type`: 可选，手动指定基础类型（不做归约）
+
+示例：
+
+```json
+"extra_variables": [
+  {
+    "name": "manual_mode",
+    "candidates": ["0", "1", "2"]
+  },
+  {
+    "name": "manual_level",
+    "type_name": "SMEE_INT32",
+    "from_profile": true
+  }
+],
+"interface_extra_variables": {
+  "QA4A_request_align_periodic": [
+    {
+      "name": "manual_tag",
+      "seed_pool": ["\"A\"", "\"B\""]
+    }
+  ]
+}
+```
 
 ## 命令与选项
 

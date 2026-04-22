@@ -20,8 +20,17 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from interface_parser.configuration import build_output_path, load_config
+from interface_parser.configuration import (
+    build_output_path,
+    get_type_profile,
+    get_variable_profile,
+    load_config,
+    resolve_parse_file_groups,
+    resolve_project_root,
+)
+from interface_parser.c_parser import CTypeParser
 from interface_parser.parse_interface import parse_targets
+from interface_parser.type_specs import select_type_spec
 
 
 def _normalize_scope(value: object, default: str = "selected") -> str:
@@ -72,6 +81,44 @@ def _normalize_constraint_groups(value: object) -> List[dict]:
     return out
 
 
+def _normalize_extra_variables(value: object) -> List[dict]:
+    if not isinstance(value, list):
+        return []
+    out: List[dict] = []
+    for item in value:
+        if isinstance(item, dict):
+            out.append(item)
+    return out
+
+
+def _normalize_interface_extra_variables(value: object) -> Dict[str, List[dict]]:
+    if not isinstance(value, dict):
+        return {}
+    out: Dict[str, List[dict]] = {}
+    for k, v in value.items():
+        key = str(k).strip()
+        if not key:
+            continue
+        out[key] = _normalize_extra_variables(v)
+    return out
+
+
+def _to_str_list(value: object) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(v) for v in value]
+
+
+def _deep_merge_dict(base: dict, override: dict) -> dict:
+    merged = dict(base)
+    for k, v in override.items():
+        if isinstance(merged.get(k), dict) and isinstance(v, dict):
+            merged[k] = _deep_merge_dict(merged[k], v)
+        else:
+            merged[k] = v
+    return merged
+
+
 def _get_case_generation_config(config: dict) -> dict:
     cfg = config.get("case_generation", {})
     if not isinstance(cfg, dict):
@@ -84,6 +131,10 @@ def _get_case_generation_config(config: dict) -> dict:
         "case_count": _parse_case_count(cfg.get("case_count", "all"), "all"),
         "random_seed": _safe_int(cfg.get("random_seed", 42), 42),
         "constraint_groups": _normalize_constraint_groups(cfg.get("constraint_groups")),
+        "extra_variables": _normalize_extra_variables(cfg.get("extra_variables")),
+        "interface_extra_variables": _normalize_interface_extra_variables(
+            cfg.get("interface_extra_variables")
+        ),
     }
 
 
@@ -107,6 +158,96 @@ def _sample_unique_indices(total_count: int, sample_count: int, rng: random.Rand
     while len(seen) < sample_count:
         seen.add(rng.randrange(total_count))
     return sorted(seen)
+
+
+def _resolve_extra_variables_for_interface(
+    config: dict,
+    interface_name: str,
+    extra_defs: List[dict],
+    type_parser: CTypeParser,
+) -> tuple[List[dict], List[str]]:
+    resolved: List[dict] = []
+    warnings: List[str] = []
+
+    for idx, item in enumerate(extra_defs, start=1):
+        name = str(item.get("name", "")).strip()
+        if not name:
+            warnings.append(f"extra_variables[{idx}] skipped: missing 'name'.")
+            continue
+
+        selected = bool(item.get("selected", True))
+        type_name = str(item.get("type_name", "")).strip()
+        source_type_cfg = str(item.get("source_type", "")).strip()
+        basic_type_cfg = str(item.get("basic_type", "")).strip()
+
+        source_type = "custom"
+        basic_type = "custom"
+        if type_name:
+            source_type = type_parser.resolve_alias(type_name)
+            basic_type = type_parser.classify_basic_type(type_name)
+        elif source_type_cfg:
+            source_type = type_parser.resolve_alias(source_type_cfg)
+            basic_type = type_parser.classify_basic_type(source_type_cfg)
+        elif basic_type_cfg:
+            basic_type = basic_type_cfg
+            source_type = basic_type_cfg
+        else:
+            source_type = "custom"
+            basic_type = "custom"
+
+        candidates = _to_str_list(item.get("candidates"))
+        if not candidates:
+            candidates = _to_str_list(item.get("seed_pool"))
+        if not candidates:
+            candidates = _to_str_list(item.get("legal_values"))
+
+        source = "custom_candidates"
+        if not candidates:
+            if any(k in item for k in ["basic_type", "source_type", "type_name", "from_profile"]):
+                profile = get_type_profile(config, interface_name, basic_type, source_type)
+                profile = _deep_merge_dict(
+                    profile, get_variable_profile(config, interface_name, name)
+                )
+                entry_profile = {}
+                for key in [
+                    "seed_pool",
+                    "legal_values",
+                    "illegal_values",
+                    "boundary_values",
+                    "value_range",
+                ]:
+                    if key in item:
+                        entry_profile[key] = item[key]
+                profile = _deep_merge_dict(profile, entry_profile)
+
+                type_spec = select_type_spec(
+                    basic_type=basic_type,
+                    source_type=source_type,
+                    profile=profile,
+                    enum_members=type_parser.enum_members,
+                    enum_member_values=type_parser.enum_member_values,
+                )
+                candidates = type_spec.get_legal_values()
+                source = "profile_derived"
+
+        if not candidates:
+            warnings.append(
+                f"extra variable '{name}' skipped: no candidates (set candidates/seed_pool or profile keys)."
+            )
+            continue
+
+        resolved.append(
+            {
+                "name": name,
+                "basic_type": basic_type,
+                "source_type": source_type,
+                "candidates": candidates,
+                "selected": selected,
+                "source": source,
+            }
+        )
+
+    return resolved, warnings
 
 
 def _build_dimensions(
@@ -219,6 +360,8 @@ def _build_interface_cases(
     case_count_cfg: str | int,
     rng: random.Random,
     constraint_groups: List[dict],
+    extra_vars: List[dict],
+    extra_warnings: List[str],
 ) -> dict:
     interface_name = str(interface_item.get("interface", "unknown"))
     expanded = interface_item.get("expanded_variables", [])
@@ -237,11 +380,26 @@ def _build_interface_cases(
             {
                 "name": str(var.get("name", "")),
                 "basic_type": str(var.get("basic_type", "")),
+                "source_type": str(var.get("basic_type", "")),
                 "candidates": candidates,
+                "selected": bool(var.get("variation_target", False)),
+                "source": "interface_parsed",
             }
         )
 
-    warnings: List[str] = []
+    warnings: List[str] = list(extra_warnings)
+    if extra_vars:
+        selected_vars.extend(extra_vars)
+
+    # Deduplicate by name; later one wins (extra vars can override parsed vars).
+    merged_by_name: Dict[str, dict] = {}
+    for v in selected_vars:
+        merged_by_name[v["name"]] = v
+    selected_vars = list(merged_by_name.values())
+
+    if scope == "selected":
+        selected_vars = [v for v in selected_vars if bool(v.get("selected", True))]
+
     vars_for_combine = [v for v in selected_vars if v["candidates"]]
     empty_candidate_vars = [v["name"] for v in selected_vars if not v["candidates"]]
     if empty_candidate_vars:
@@ -305,8 +463,10 @@ def _build_interface_cases(
             {
                 "name": v["name"],
                 "basic_type": v["basic_type"],
+                "source_type": v.get("source_type", v["basic_type"]),
                 "candidate_count": len(v["candidates"]),
                 "candidates": v["candidates"],
+                "source": v.get("source", "unknown"),
             }
             for v in vars_for_combine
         ],
@@ -350,11 +510,30 @@ def generate_cases(
     rng = random.Random(random_seed)
 
     parsed = parse_targets(config_path, output_mode="full")
+    base_dir = resolve_project_root(config_path)
+    type_files, _ = resolve_parse_file_groups(base_dir, config)
+    type_parser = CTypeParser()
+    type_parser.parse_headers(type_files)
 
-    interface_results = [
-        _build_interface_cases(item, scope, case_count_cfg, rng, gen_cfg["constraint_groups"])
-        for item in parsed.get("interface_results", [])
-    ]
+    interface_results = []
+    for item in parsed.get("interface_results", []):
+        interface_name = str(item.get("interface", "unknown"))
+        raw_extra = list(gen_cfg["extra_variables"])
+        raw_extra.extend(gen_cfg["interface_extra_variables"].get(interface_name, []))
+        extra_vars, extra_warnings = _resolve_extra_variables_for_interface(
+            config, interface_name, raw_extra, type_parser
+        )
+        interface_results.append(
+            _build_interface_cases(
+                interface_item=item,
+                scope=scope,
+                case_count_cfg=case_count_cfg,
+                rng=rng,
+                constraint_groups=gen_cfg["constraint_groups"],
+                extra_vars=extra_vars,
+                extra_warnings=extra_warnings,
+            )
+        )
 
     if output_mode == "simple":
         simple_items = []
