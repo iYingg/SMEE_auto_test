@@ -6,6 +6,7 @@
 - 解析配置：`config/parser/targets.json`
 - 解析策略：`config/parser/profiles.json`
 - 用例生成配置：`config/casegen/targets.json`
+- 用例生成规则：`config/casegen/rules/*.json`
 
 ### 解析配置（`config/parser/targets.json`）
 核心字段：
@@ -38,11 +39,22 @@
 - `case_generation.filename_format`: 用例文件名模板
 - `case_generation.variable_scope`: `selected` 或 `all`
 - `case_generation.mode`: `full` 或 `simple`
-- `case_generation.extra_variables`: 全局额外变量（接口外参数）
-- `case_generation.interface_extra_variables`: 接口级额外变量
-- `case_generation.constraint_groups`: 多参数组合约束组（可选）
 - `case_generation.case_count`: 正整数或 `all`
 - `case_generation.random_seed`: 随机种子
+
+推荐拆分：
+- `config/casegen/targets.json`：仅放运行参数（目录、模式、数量等）
+- `config/casegen/rules/extra_variables.json`：接口外变量
+- `config/casegen/rules/constraint_groups.json`：多参数组合约束
+
+其中 `targets.json` 通过 `includes` 合并规则文件。
+
+`extra_variables` 位置：
+- `case_generation.extra_variables`: 全局额外变量（接口外参数）
+- `case_generation.interface_extra_variables`: 接口级额外变量
+
+`constraint_groups` 位置：
+- `case_generation.constraint_groups`: 多参数组合约束组
 
 `constraint_groups` 结构：
 - `name`: 约束组名称

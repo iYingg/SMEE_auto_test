@@ -4,10 +4,12 @@
     "data/api/QA_tc.h"
   ],
   "interface_files": [
-    "data/api/**/*.h"
+    "data/api/**/*.h",
+    "data/QA.c"
   ],
   "target_interfaces": [
-    "QA4A_request_align_periodic"
+    "QA4A_request_align_periodic",
+    "QA4A_request_align_periodic2"
   ],
   "output": {
     "dir": "output",

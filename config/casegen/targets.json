@@ -1,16 +1,15 @@
 {
   "includes": [
     "../parser/targets.json",
-    "../parser/profiles.json"
+    "../parser/profiles.json",
+    "rules/extra_variables.json",
+    "rules/constraint_groups.json"
   ],
   "case_generation": {
     "dir": "output/testcases",
     "filename_format": "testcases_{interface}_{datetime}.json",
     "variable_scope": "selected",
     "mode": "full",
-    "extra_variables": [],
-    "interface_extra_variables": {},
-    "constraint_groups": [],
     "case_count": "all",
     "random_seed": 42
   }

@@ -24,3 +24,11 @@ SMEE_INT32 QA4A_request_align_periodic(
 
     return 0;
 }
+
+SMEE_INT32 QA4A_request_align_periodic2(
+    IN const QA4A_ALIGN_SCAN_BASE_STRUCT *align_scan_base,
+    IN const QA4A_ALIGN_SCAN_PERIODIC_STRUCT *align_scan_periodic,
+    OUT SMEE_INT32 *align_scan_periodic_id)
+{
+    return 0;
+}
