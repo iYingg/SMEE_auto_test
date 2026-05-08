@@ -166,6 +166,17 @@ def _try_parse_float(text: str) -> float | None:
         return None
 
 
+def _string_candidate_len(text: str) -> int:
+    s = str(text)
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in {"'", '"'}:
+        inner = s[1:-1]
+        try:
+            return len(bytes(inner, "utf-8").decode("unicode_escape"))
+        except UnicodeDecodeError:
+            return len(inner)
+    return len(s)
+
+
 def _get_custom_value_range(profile: dict) -> dict | None:
     custom = profile.get("value_range")
     if not isinstance(custom, dict):
@@ -235,6 +246,19 @@ def _compute_effective_boundary_values(
     value_range: dict | None,
     fallback_boundary: dict,
 ) -> dict:
+    if basic_type == "string":
+        out = dict(fallback_boundary)
+        if legal_values:
+            by_len = sorted(
+                enumerate(legal_values),
+                key=lambda x: (_string_candidate_len(x[1]), x[0]),
+            )
+            out["min_len"] = by_len[0][1]
+            out["max_len"] = by_len[-1][1]
+            out["empty"] = next((x for x in legal_values if _string_candidate_len(x) == 0), None)
+        out["invalid"] = illegal_values
+        return out
+
     if basic_type == "enum(int)":
         out = dict(fallback_boundary)
         out["first"] = legal_values[0] if legal_values else None
