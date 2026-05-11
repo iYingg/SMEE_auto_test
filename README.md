@@ -133,11 +133,12 @@
 ### 1) 解析命令
 
 ```bash
+python src/interface_parser/parse_interface.py
 python src/interface_parser/parse_interface.py --config config/parser/targets.json
 ```
 
 选项：
-- `--config <path>`: 必填，配置文件路径
+- `--config <path>`: 可选，配置文件路径（默认：`config/parser/targets.json`）
 - `--output <path>`: 覆盖输出路径
 - `--mode <full|simple>`: 覆盖 `output.mode`
 - `--scope <all|selected>`: 覆盖 `output.scope`
@@ -150,6 +151,7 @@ python src/interface_parser/parse_interface.py --config config/parser/targets.js
 示例：
 
 ```bash
+python src/interface_parser/parse_interface.py
 python src/interface_parser/parse_interface.py --config config/parser/targets.json --mode full --scope selected
 python src/interface_parser/parse_interface.py --config config/parser/targets.json --simple
 ```
@@ -157,11 +159,12 @@ python src/interface_parser/parse_interface.py --config config/parser/targets.js
 ### 2) 测试用例生成命令
 
 ```bash
+python src/casegen/generate_test_cases.py
 python src/casegen/generate_test_cases.py --config config/casegen/targets.json
 ```
 
 选项：
-- `--config <path>`: 必填，配置文件路径
+- `--config <path>`: 可选，配置文件路径（默认：`config/casegen/targets.json`）
 - `--output <path>`: 覆盖输出路径
 - `--scope <all|selected>`: 覆盖 `case_generation.variable_scope`
 - `--mode <full|simple>`: 覆盖 `case_generation.mode`
@@ -182,6 +185,7 @@ python src/casegen/generate_test_cases.py --config config/casegen/targets.json
 示例：
 
 ```bash
+python src/casegen/generate_test_cases.py
 python src/casegen/generate_test_cases.py --config config/casegen/targets.json --case-count 200
 python src/casegen/generate_test_cases.py --config config/casegen/targets.json --scope all --case-count all
 python src/casegen/generate_test_cases.py --config config/casegen/targets.json --simple

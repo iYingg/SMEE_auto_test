@@ -3,6 +3,7 @@
 Generate discrete test cases by free-combining variable candidate values.
 
 Usage:
+    python src/casegen/generate_test_cases.py
     python src/casegen/generate_test_cases.py --config config/casegen/targets.json
 """
 
@@ -579,8 +580,13 @@ def generate_cases(
 
 
 def main() -> None:
+    default_config = Path(__file__).resolve().parents[2] / "config" / "casegen" / "targets.json"
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", required=True, help="Path to JSON config")
+    ap.add_argument(
+        "--config",
+        default=str(default_config),
+        help=f"Path to JSON config (default: {default_config}).",
+    )
     ap.add_argument(
         "--output",
         default="",

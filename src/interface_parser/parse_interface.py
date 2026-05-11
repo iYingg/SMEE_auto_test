@@ -3,6 +3,7 @@
 Parse target C interfaces and flatten parameter variables to basic types.
 
 Usage:
+    python src/interface_parser/parse_interface.py
     python src/interface_parser/parse_interface.py --config config/parser/targets.json
 """
 
@@ -487,8 +488,13 @@ def parse_targets(config_path: Path, output_mode: str = "full") -> dict:
 
 
 def main() -> None:
+    default_config = Path(__file__).resolve().parents[2] / "config" / "parser" / "targets.json"
     ap = argparse.ArgumentParser()
-    ap.add_argument("--config", required=True, help="Path to JSON config")
+    ap.add_argument(
+        "--config",
+        default=str(default_config),
+        help=f"Path to JSON config (default: {default_config}).",
+    )
     ap.add_argument(
         "--output",
         default="",
