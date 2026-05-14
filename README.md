@@ -29,8 +29,12 @@
 常用子字段：
 - `seed_pool`
 - `illegal_values`
-- `boundary_values`
 - `value_range`
+
+变量路径规则：
+- 变量名统一使用 `接口名.变量路径`
+- 例如：`QA4A_request_align_periodic.align_scan_base.a`
+- 例如：`QA4A_request_align_periodic.align_scan_periodic.other_struct[*].some_string`
 
 ### 用例生成配置（`config/casegen/targets.json`）
 核心字段：
@@ -68,17 +72,17 @@
   {
     "name": "base_and_struct0",
     "variables": [
-      "align_scan_base.a",
-      "align_scan_periodic.other_struct[0].some_field"
+      "QA4A_request_align_periodic.align_scan_base.a",
+      "QA4A_request_align_periodic.align_scan_periodic.other_struct[0].some_field"
     ],
     "combinations": [
       {
-        "align_scan_base.a": "2",
-        "align_scan_periodic.other_struct[0].some_field": "0"
+        "QA4A_request_align_periodic.align_scan_base.a": "2",
+        "QA4A_request_align_periodic.align_scan_periodic.other_struct[0].some_field": "0"
       },
       {
-        "align_scan_base.a": "6",
-        "align_scan_periodic.other_struct[0].some_field": "1"
+        "QA4A_request_align_periodic.align_scan_base.a": "6",
+        "QA4A_request_align_periodic.align_scan_periodic.other_struct[0].some_field": "1"
       }
     ]
   }
@@ -107,11 +111,11 @@
 ```json
 "extra_variables": [
   {
-    "name": "manual_mode",
+    "name": "QA4A_request_align_periodic.manual_mode",
     "candidates": ["0", "1", "2"]
   },
   {
-    "name": "manual_level",
+    "name": "QA4A_request_align_periodic.manual_level",
     "type_name": "SMEE_INT32",
     "from_profile": true
   }
@@ -119,7 +123,7 @@
 "interface_extra_variables": {
   "QA4A_request_align_periodic": [
     {
-      "name": "manual_tag",
+      "name": "QA4A_request_align_periodic.manual_tag",
       "seed_pool": ["\"A\"", "\"B\""]
     }
   ]
@@ -147,6 +151,11 @@ python src/interface_parser/parse_interface.py --config config/parser/targets.js
 优先级：
 - `mode`: `--simple` > `--mode` > `output.mode`
 - `scope`: `--scope` > `output.scope`
+
+输出说明：
+- `full`: 按接口输出变量解析结果
+- 变量名统一带接口前缀，例如 `QA4A_request_align_periodic.chunk_id`
+- 当前解析结果不再输出 `boundary_values`
 
 示例：
 
@@ -178,9 +187,10 @@ python src/casegen/generate_test_cases.py --config config/casegen/targets.json
 生成策略：
 - `--case-count all`: 全组合
 - `--case-count N`: 当 `N` 小于全组合数时，无放回随机采样
+- 多接口场景下，当前会把选中的变量合并为一份输入集合，再统一组合生成测试用例
 - 输出模式：
-  - `full`: 保留统计、变量候选、`combination_index` 等完整信息
-  - `simple`: 仅保留测试编号和变量赋值（`id` + `inputs`）
+  - `full`: 输出单份 `case_set`，包含统计、变量候选、`combination_index` 等信息
+  - `simple`: 输出单份 `test_cases`，仅保留测试编号和变量赋值（`id` + `inputs`）
 
 示例：
 

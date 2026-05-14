@@ -25,10 +25,41 @@
           "100"
         ]
       }
+    },
+    "SMEE_BOOL": {
+      "seed_pool": [
+        "SMEE_FALSE",
+        "SMEE_TRUE"
+      ],
+      "illegal_values": [
+        "-1",
+        "2"
+      ],
+      "boundary_values": {
+        "typical": [
+          "SMEE_FALSE",
+          "SMEE_TRUE"
+        ]
+      }
     }
   },
   "variable_profiles": {
-    "align_scan_periodic_id": {
+    "QA4A_request_align_periodic.align_scan_periodic_id": {
+      "value_range": {
+        "min": 10,
+        "max": 20
+      },
+      "seed_pool": [
+        "10",
+        "15",
+        "20"
+      ],
+      "illegal_values": [
+        "9",
+        "21"
+      ]
+    },
+    "QA4A_request_align_periodic2.align_scan_periodic_id": {
       "value_range": {
         "min": 10,
         "max": 20
@@ -56,7 +87,23 @@
         }
       },
       "variable_profiles": {
-        "align_scan_periodic.other_struct[*].some_field": {
+        "QA4A_request_align_periodic.align_scan_periodic.other_struct[*].is_valid": {
+          "seed_pool": [
+            "SMEE_FALSE",
+            "SMEE_TRUE"
+          ],
+          "illegal_values": [
+            "-1",
+            "2"
+          ],
+          "boundary_values": {
+            "typical": [
+              "SMEE_FALSE",
+              "SMEE_TRUE"
+            ]
+          }
+        },
+        "QA4A_request_align_periodic.align_scan_periodic.other_struct[*].some_field": {
           "value_range": {
             "min": 0,
             "max": 3
@@ -69,6 +116,20 @@
           "illegal_values": [
             "-1",
             "4"
+          ]
+        }
+      }
+    },
+    "QA4A_request_align_periodic2": {
+      "variable_profiles": {
+        "QA4A_request_align_periodic2.align_scan_periodic.other_struct[*].is_valid": {
+          "seed_pool": [
+            "SMEE_FALSE",
+            "SMEE_TRUE"
+          ],
+          "illegal_values": [
+            "-1",
+            "2"
           ]
         }
       }

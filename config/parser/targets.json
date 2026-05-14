@@ -20,10 +20,10 @@
   "variation": {
     "mode": "mark",
     "variables": [
-      "align_scan_base.a",
-      "align_scan_periodic.other_struct[*].some_field"
+      "QA4A_request_align_periodic.chunk_id",
+      "QA4A_request_align_periodic.align_scan_base.a",
+      "QA4A_request_align_periodic.align_scan_periodic.other_struct[*].some_string"
     ]
   },
   "includes": "profiles.json"
 }
-

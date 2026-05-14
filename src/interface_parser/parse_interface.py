@@ -25,7 +25,7 @@ if __package__:
         resolve_project_root,
         resolve_parse_file_groups,
     )
-    from .type_specs import select_type_spec
+    from .type_specs import INTEGER_LIMITS, select_type_spec
 else:
     import sys
 
@@ -39,7 +39,7 @@ else:
         resolve_project_root,
         resolve_parse_file_groups,
     )
-    from interface_parser.type_specs import select_type_spec
+    from interface_parser.type_specs import INTEGER_LIMITS, select_type_spec
 
 
 def dedupe_leaf_vars(items: List[LeafVar]) -> List[LeafVar]:
@@ -121,6 +121,10 @@ def _is_variation_target(path: str, patterns: List[str]) -> bool:
         if re.fullmatch(regex, path):
             return True
     return False
+
+
+def _with_interface_prefix(interface_name: str, var_path: str) -> str:
+    return f"{interface_name}.{var_path}"
 
 
 def _build_selected_report(parsed: dict) -> dict:
@@ -240,96 +244,6 @@ def _compute_effective_value_range(
     return None
 
 
-def _compute_effective_boundary_values(
-    basic_type: str,
-    legal_values: List[str],
-    illegal_values: List[str],
-    value_range: dict | None,
-    fallback_boundary: dict,
-) -> dict:
-    if basic_type == "string":
-        out = dict(fallback_boundary)
-        if legal_values:
-            by_len = sorted(
-                enumerate(legal_values),
-                key=lambda x: (_string_candidate_len(x[1]), x[0]),
-            )
-            out["min_len"] = by_len[0][1]
-            out["max_len"] = by_len[-1][1]
-            out["empty"] = next((x for x in legal_values if _string_candidate_len(x) == 0), None)
-        out["invalid"] = illegal_values
-        return out
-
-    if basic_type == "enum(int)":
-        out = dict(fallback_boundary)
-        out["first"] = legal_values[0] if legal_values else None
-        out["last"] = legal_values[-1] if legal_values else None
-        if value_range:
-            out["min"] = str(value_range["min"])
-            out["max"] = str(value_range["max"])
-            out["count"] = value_range["count"]
-        out["invalid"] = illegal_values
-        return out
-
-    range_min_i = _try_parse_int(value_range.get("min")) if isinstance(value_range, dict) else None
-    range_max_i = _try_parse_int(value_range.get("max")) if isinstance(value_range, dict) else None
-    if range_min_i is not None and range_max_i is not None:
-        mn = range_min_i
-        mx = range_max_i
-        typical = legal_values if legal_values else [str(mn), str(mx)]
-        return {
-            "min": str(mn),
-            "min_plus_1": str(mn + 1) if mn + 1 <= mx else str(mn),
-            "typical": typical,
-            "max_minus_1": str(mx - 1) if mx - 1 >= mn else str(mx),
-            "max": str(mx),
-            "invalid": illegal_values,
-        }
-
-    int_vals = [_try_parse_int(v) for v in legal_values]
-    if all(v is not None for v in int_vals) and int_vals:
-        vals = [v for v in int_vals if v is not None]
-        mn = min(vals)
-        mx = max(vals)
-        return {
-            "min": str(mn),
-            "min_plus_1": str(mn + 1) if mn + 1 <= mx else str(mn),
-            "typical": legal_values,
-            "max_minus_1": str(mx - 1) if mx - 1 >= mn else str(mx),
-            "max": str(mx),
-            "invalid": illegal_values,
-        }
-
-    range_min_f = _try_parse_float(value_range.get("min")) if isinstance(value_range, dict) else None
-    range_max_f = _try_parse_float(value_range.get("max")) if isinstance(value_range, dict) else None
-    if range_min_f is not None and range_max_f is not None:
-        return {
-            "negative_large": None,
-            "negative_small": str(range_min_f),
-            "zero": "0.0" if range_min_f <= 0 <= range_max_f else None,
-            "positive_small": str(range_max_f),
-            "positive_large": None,
-            "invalid": illegal_values,
-        }
-
-    if basic_type in {"float", "double", "long double"}:
-        float_vals = [_try_parse_float(v) for v in legal_values]
-        if all(v is not None for v in float_vals) and float_vals:
-            vals_f = [v for v in float_vals if v is not None]
-            return {
-                "negative_large": None,
-                "negative_small": str(min(vals_f)),
-                "zero": "0.0" if any(abs(v) < 1e-15 for v in vals_f) else None,
-                "positive_small": str(max(vals_f)),
-                "positive_large": None,
-                "invalid": illegal_values,
-            }
-
-    out = dict(fallback_boundary)
-    out["invalid"] = illegal_values
-    return out
-
-
 def build_interface_output(
     interface_name: str,
     flat_vars: List[LeafVar],
@@ -347,14 +261,13 @@ def build_interface_output(
     if output_mode == "simple":
         simple_vars = []
         for v in flat_vars:
-            is_target = (
-                _is_variation_target(v.path, variation_patterns) if variation_enabled else True
-            )
+            qualified_name = _with_interface_prefix(interface_name, v.path)
+            is_target = _is_variation_target(qualified_name, variation_patterns) if variation_enabled else True
             if variation_mode == "only" and not is_target:
                 continue
             simple_vars.append(
                 {
-                    "name": v.path,
+                    "name": qualified_name,
                     "basic_type": v.basic_type,
                     "variation_target": is_target,
                 }
@@ -378,12 +291,13 @@ def build_interface_output(
 
     expanded_variables = []
     for v in flat_vars:
-        is_target = _is_variation_target(v.path, variation_patterns) if variation_enabled else True
+        qualified_name = _with_interface_prefix(interface_name, v.path)
+        is_target = _is_variation_target(qualified_name, variation_patterns) if variation_enabled else True
         if variation_mode == "only" and not is_target:
             continue
 
         type_profile = get_type_profile(config, interface_name, v.basic_type, v.source_type)
-        variable_profile = get_variable_profile(config, interface_name, v.path)
+        variable_profile = get_variable_profile(config, interface_name, qualified_name)
         profile = _deep_merge_dict(type_profile, variable_profile)
         type_spec = select_type_spec(
             v.basic_type, v.source_type, profile, enum_members, enum_member_values
@@ -393,9 +307,6 @@ def build_interface_output(
         value_range = _get_custom_value_range(profile)
         if value_range is None:
             value_range = _compute_effective_value_range(v.basic_type, legal_values, type_spec)
-        effective_boundary = _compute_effective_boundary_values(
-            v.basic_type, legal_values, illegal_values, value_range, type_spec.get_boundary_values()
-        )
         value_domain = {
             "source": type_spec.value_source(),
             "candidates": legal_values,
@@ -403,15 +314,15 @@ def build_interface_output(
         }
         if value_range is not None:
             value_domain["value_range"] = value_range
-        expanded_variables.append(
-            {
-                "name": v.path,
-                "basic_type": v.basic_type,
-                "variation_target": is_target,
-                "value_domain": value_domain,
-                "boundary_values": effective_boundary,
-            }
-        )
+        item = {
+            "name": qualified_name,
+            "basic_type": v.basic_type,
+            "variation_target": is_target,
+            "value_domain": value_domain,
+        }
+        if v.basic_type == "enum(int)":
+            item["enum_type_name"] = v.source_type
+        expanded_variables.append(item)
 
     return {
         "interface": interface_name,

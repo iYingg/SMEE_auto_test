@@ -207,7 +207,8 @@ def _resolve_extra_variables_for_interface(
             if any(k in item for k in ["basic_type", "source_type", "type_name", "from_profile"]):
                 profile = get_type_profile(config, interface_name, basic_type, source_type)
                 profile = _deep_merge_dict(
-                    profile, get_variable_profile(config, interface_name, name)
+                    profile,
+                    get_variable_profile(config, interface_name, name),
                 )
                 entry_profile = {}
                 for key in [
@@ -516,56 +517,64 @@ def generate_cases(
     type_parser = CTypeParser()
     type_parser.parse_headers(type_files)
 
-    interface_results = []
+    source_interfaces: List[str] = []
+    combined_expanded_vars: List[dict] = []
+    combined_extra_vars: List[dict] = []
+    combined_extra_warnings: List[str] = []
+
     for item in parsed.get("interface_results", []):
         interface_name = str(item.get("interface", "unknown"))
+        source_interfaces.append(interface_name)
+        expanded = item.get("expanded_variables", [])
+        if isinstance(expanded, list):
+            combined_expanded_vars.extend(expanded)
+
         raw_extra = list(gen_cfg["extra_variables"])
         raw_extra.extend(gen_cfg["interface_extra_variables"].get(interface_name, []))
         extra_vars, extra_warnings = _resolve_extra_variables_for_interface(
             config, interface_name, raw_extra, type_parser
         )
-        interface_results.append(
-            _build_interface_cases(
-                interface_item=item,
-                scope=scope,
-                case_count_cfg=case_count_cfg,
-                rng=rng,
-                constraint_groups=gen_cfg["constraint_groups"],
-                extra_vars=extra_vars,
-                extra_warnings=extra_warnings,
-            )
-        )
+        combined_extra_vars.extend(extra_vars)
+        combined_extra_warnings.extend([f"[{interface_name}] {w}" for w in extra_warnings])
+
+    combined_case_set = _build_interface_cases(
+        interface_item={
+            "interface": "combined",
+            "expanded_variables": combined_expanded_vars,
+        },
+        scope=scope,
+        case_count_cfg=case_count_cfg,
+        rng=rng,
+        constraint_groups=gen_cfg["constraint_groups"],
+        extra_vars=combined_extra_vars,
+        extra_warnings=combined_extra_warnings,
+    )
+    combined_case_set["scope_mode"] = "cross_interface_combined"
+    combined_case_set["source_interfaces"] = source_interfaces
 
     if output_mode == "simple":
-        simple_items = []
-        for item in interface_results:
-            simple_cases = []
-            for case in item.get("test_cases", []):
-                simple_cases.append(
-                    {
-                        "id": case.get("id"),
-                        "inputs": case.get("inputs", {}),
-                    }
-                )
-            simple_items.append(
+        simple_cases = []
+        for case in combined_case_set.get("test_cases", []):
+            simple_cases.append(
                 {
-                    "interface": item.get("interface", "unknown"),
-                    "test_cases": simple_cases,
+                    "id": case.get("id"),
+                    "inputs": case.get("inputs", {}),
                 }
             )
         return {
-            "interface_results": simple_items,
+            "scope_mode": "cross_interface_combined",
+            "source_interfaces": source_interfaces,
+            "test_cases": simple_cases,
         }
 
     summary = {
-        "interface_count": len(interface_results),
+        "interface_count": len(source_interfaces),
         "output_mode": output_mode,
         "variable_scope": scope,
         "case_count_config": case_count_cfg,
         "random_seed": random_seed,
-        "total_cases_generated": sum(
-            int(item.get("stats", {}).get("generated_case_count", 0))
-            for item in interface_results
+        "total_cases_generated": int(
+            combined_case_set.get("stats", {}).get("generated_case_count", 0)
         ),
     }
 
@@ -574,7 +583,7 @@ def generate_cases(
             "dimension": "discrete_only",
             "notes": "No continuous-value bucketing in current version.",
         },
-        "interface_results": interface_results,
+        "case_set": combined_case_set,
         "summary": summary,
     }
 
