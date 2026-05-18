@@ -1,0 +1,30 @@
+{
+  "type_files": [
+    "data/common",
+    "data/api/QA_tc.h"
+  ],
+  "interface_files": [
+    "data/api/**/*.h",
+    "data/QA.c"
+  ],
+  "target_interfaces": [
+    "QA4A_request_align_periodic"
+  ],
+  "output": {
+    "dir": "output",
+    "filename_format": "parse_result_single_interface_extra_demo.json",
+    "mode": "full",
+    "scope": "selected"
+  },
+  "variation": {
+    "mode": "mark",
+    "variables": [
+      "QA4A_request_align_periodic.chunk_id",
+      "QA4A_request_align_periodic.align_scan_base.a"
+    ]
+  },
+  "includes": [
+    "profiles.json",
+    "../casegen/rules/extra_variables_single_interface_demo.json"
+  ]
+}

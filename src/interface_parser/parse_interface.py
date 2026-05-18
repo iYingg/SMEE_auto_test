@@ -84,6 +84,38 @@ def _normalize_scope(value: object, default: str = "all") -> str:
     return default
 
 
+def _normalize_extra_variables(value: object) -> List[dict]:
+    if not isinstance(value, list):
+        return []
+    out: List[dict] = []
+    for item in value:
+        if isinstance(item, dict):
+            out.append(item)
+    return out
+
+
+def _normalize_interface_extra_variables(value: object) -> Dict[str, List[dict]]:
+    if not isinstance(value, dict):
+        return {}
+    out: Dict[str, List[dict]] = {}
+    for k, v in value.items():
+        key = str(k).strip()
+        if not key:
+            continue
+        out[key] = _normalize_extra_variables(v)
+    return out
+
+
+def _get_case_generation_extra_config(config: dict) -> tuple[List[dict], Dict[str, List[dict]]]:
+    cfg = config.get("case_generation", {})
+    if not isinstance(cfg, dict):
+        return [], {}
+    return (
+        _normalize_extra_variables(cfg.get("extra_variables")),
+        _normalize_interface_extra_variables(cfg.get("interface_extra_variables")),
+    )
+
+
 def _get_variation_config(config: dict, interface_name: str) -> tuple[str, List[str], bool]:
     """
     Returns:
@@ -244,6 +276,65 @@ def _compute_effective_value_range(
     return None
 
 
+def _resolve_extra_variables_for_interface(
+    config: dict,
+    interface_name: str,
+    extra_defs: List[dict],
+    enum_members: Dict[str, List[str]],
+    enum_member_values: Dict[str, List[tuple[str, int]]],
+) -> List[dict]:
+    resolved: List[dict] = []
+    for item in extra_defs:
+        name = str(item.get("name", "")).strip()
+        if not name:
+            continue
+
+        basic_type = str(item.get("basic_type", "")).strip() or "custom"
+        source_type = str(item.get("source_type", "")).strip() or basic_type
+        type_name = str(item.get("type_name", "")).strip()
+        if type_name:
+            source_type = type_name
+
+        type_profile = get_type_profile(config, interface_name, basic_type, source_type)
+        variable_profile = get_variable_profile(config, interface_name, name)
+        profile = _deep_merge_dict(type_profile, variable_profile)
+        profile = _deep_merge_dict(profile, item if isinstance(item, dict) else {})
+        type_spec = select_type_spec(
+            basic_type,
+            source_type,
+            profile,
+            enum_members,
+            enum_member_values,
+        )
+
+        legal_values = _normalize_str_list(item.get("candidates"))
+        if not legal_values:
+            legal_values = _normalize_str_list(item.get("seed_pool"))
+        if not legal_values:
+            legal_values = _normalize_str_list(item.get("legal_values"))
+        if not legal_values:
+            legal_values = type_spec.get_legal_values()
+
+        illegal_values = type_spec.get_illegal_values()
+        is_target = bool(item.get("selected", True))
+        value_domain = {
+            "source": "extra_variable",
+            "candidates": legal_values,
+            "invalid_candidates": illegal_values,
+        }
+
+        extra_item = {
+            "name": name,
+            "basic_type": basic_type if basic_type != "custom" else "custom",
+            "variation_target": is_target,
+            "value_domain": value_domain,
+        }
+        if basic_type == "enum(int)":
+            extra_item["enum_type_name"] = source_type
+        resolved.append(extra_item)
+    return resolved
+
+
 def build_interface_output(
     interface_name: str,
     flat_vars: List[LeafVar],
@@ -346,6 +437,7 @@ def parse_targets(config_path: Path, output_mode: str = "full") -> dict:
     type_files, interface_files = resolve_parse_file_groups(base_dir, config)
     parser = CTypeParser()
     parser.parse_headers(type_files)
+    global_extra_defs, interface_extra_map = _get_case_generation_extra_config(config)
 
     text_by_file = {fp: fp.read_text(encoding="utf-8") for fp in interface_files}
     result = {
@@ -381,6 +473,21 @@ def parse_targets(config_path: Path, output_mode: str = "full") -> dict:
             config,
             output_mode,
         )
+        extra_defs = list(global_extra_defs)
+        extra_defs.extend(interface_extra_map.get(interface_name, []))
+        if output_mode == "full" and extra_defs:
+            extras = _resolve_extra_variables_for_interface(
+                config,
+                interface_name,
+                extra_defs,
+                parser.enum_members,
+                parser.enum_member_values,
+            )
+            item["expanded_variables"].extend(extras)
+            item["stats"]["expanded_variable_count"] = len(item["expanded_variables"])
+            item["stats"]["variation_target_count"] = len(
+                [x for x in item["expanded_variables"] if x.get("variation_target")]
+            )
         result["interface_results"].append(item)
         result["summary"]["interface_count"] += 1
         result["summary"]["expanded_variable_count"] += item["stats"][

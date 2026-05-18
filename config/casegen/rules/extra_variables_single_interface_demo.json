@@ -1,0 +1,15 @@
+{
+  "case_generation": {
+    "extra_variables": [
+      {
+        "name": "manual_mode",
+        "candidates": [
+          "MODE_A",
+          "MODE_B"
+        ],
+        "selected": true
+      }
+    ],
+    "interface_extra_variables": {}
+  }
+}

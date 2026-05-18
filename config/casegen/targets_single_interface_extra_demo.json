@@ -1,0 +1,16 @@
+{
+  "includes": [
+    "../parser/targets_single_interface_extra_demo.json",
+    "../parser/profiles.json",
+    "rules/constraint_groups.json",
+    "rules/extra_variables_single_interface_demo.json"
+  ],
+  "case_generation": {
+    "dir": "output/testcases",
+    "filename_format": "testcases_single_interface_extra_demo.json",
+    "variable_scope": "selected",
+    "mode": "simple",
+    "case_count": 10,
+    "random_seed": 42
+  }
+}
