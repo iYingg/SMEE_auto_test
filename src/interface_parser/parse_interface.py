@@ -304,16 +304,11 @@ def build_interface_output(
         )
         legal_values = type_spec.get_legal_values()
         illegal_values = type_spec.get_illegal_values()
-        value_range = _get_custom_value_range(profile)
-        if value_range is None:
-            value_range = _compute_effective_value_range(v.basic_type, legal_values, type_spec)
         value_domain = {
             "source": type_spec.value_source(),
             "candidates": legal_values,
             "invalid_candidates": illegal_values,
         }
-        if value_range is not None:
-            value_domain["value_range"] = value_range
         item = {
             "name": qualified_name,
             "basic_type": v.basic_type,
